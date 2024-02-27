@@ -25,7 +25,7 @@ class GetTrainingPairs(Dataset):
             img_B = Image.fromarray(np.array(img_B)[:, ::-1, :], "RGB")
         img_A = self.transform(img_A)
         img_B = self.transform(img_B)
-        return {"A": img_A, "B": img_B}
+        return {"A": img_A.to(device), "B": img_B.to(device)}
 
     def __len__(self):
         return self.len
@@ -56,7 +56,7 @@ class GetValImage(Dataset):
     def __getitem__(self, index):
         img_val = Image.open(self.files[index % self.len])
         img_val = self.transform(img_val)
-        return {"val": img_val}
+        return {"val": img_val.to(device)}
 
     def __len__(self):
         return self.len
