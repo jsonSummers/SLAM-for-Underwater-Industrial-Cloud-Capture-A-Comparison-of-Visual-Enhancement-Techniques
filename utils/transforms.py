@@ -66,4 +66,3 @@ def create_pair_transforms(target_size=(256, 256), flip_prob=0.5):
         transforms.Resize(target_size),
         transforms.RandomHorizontalFlip(p=flip_prob)
     ]
-    #return transforms.Compose(custom_transforms)
