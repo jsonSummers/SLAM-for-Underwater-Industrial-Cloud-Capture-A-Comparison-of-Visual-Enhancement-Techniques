@@ -12,8 +12,8 @@ from PIL import Image
 # Check for GPU availability
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-dataset_path = os.getcwd() + '\\..\\Data\\Paired'
-#dataset_path = os.getcwd() + '/../Data/'
+#dataset_path = os.getcwd() + '\\..\\Data\\Paired'
+dataset_path = os.getcwd() + '/../Data/'
 
 target_size=(256, 256)
 

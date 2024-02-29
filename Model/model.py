@@ -57,8 +57,8 @@ class Generator(nn.Module):
         self.decoder = Decoder(config)
 
     def forward(self, x):
-        encoded = self.encoder(x)
-        decoded = self.decoder(encoded)
+        encoded, skips = self.encoder(x)
+        decoded = self.decoder(encoded, skips)
         return decoded
 
 

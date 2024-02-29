@@ -25,7 +25,7 @@ class GetTrainingPairs(Dataset):
         if self.input_transforms:
             img_A = self.input_transforms(img_A)
 
-        return {"A": img_A, "B": img_B}
+        return {"input": img_A, "target": img_B}
 
     def __len__(self):
         return self.len
