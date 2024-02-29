@@ -28,13 +28,14 @@ class AddVignette(object):
 
         # then get a random intensity of the vignette
         vignette = (x + y) / 2 * np.random.uniform(*self.range_vignette)
-        vignette = np.tile(vignette[..., None], [1, 1, 3])
 
-        sign = 2 * (np.random.random() < 0.5) * (self.random_sign) - 1
-        vignette = vignette.transpose((2, 0, 1))  # Transpose to match the shape of X
-        image = image * (1 + sign * vignette)
+        # Apply vignette separately to each color channel
+        for c in range(image.shape[0]):
+            sign = 2 * (np.random.random() < 0.5) * (self.random_sign) - 1
+            image[c] = image[c] * (1 + sign * vignette)
 
         return image
+
 
 
 class GaussianNoise(object):
@@ -54,14 +55,13 @@ def create_input_transforms(ratio_min_dist=0.2, range_vignette=(0.2, 0.8), std_c
         #transforms.ToTensor(),
         AddVignette(ratio_min_dist, range_vignette),
         GaussianNoise(std_cap),
-        transforms.RandomHorizontalFlip(p=0.5)
     ]
-    #return transforms.Compose(custom_transforms)
 
 
-def create_pair_transforms(flip_prob=0.5):
+def create_pair_transforms(target_size=(256, 256), flip_prob=0.5):
     return [
         #transforms.ToTensor(),
+        transforms.Resize(target_size),
         transforms.RandomHorizontalFlip(p=flip_prob)
     ]
     #return transforms.Compose(custom_transforms)

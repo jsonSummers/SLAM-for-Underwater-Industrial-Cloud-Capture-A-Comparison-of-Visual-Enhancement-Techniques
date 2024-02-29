@@ -15,9 +15,11 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 dataset_path = os.getcwd() + '\\..\\Data\\Paired'
 #dataset_path = os.getcwd() + '/../Data/'
 
-pair_transforms = create_pair_transforms(flip_prob=0.5)
+target_size=(256, 256)
+
+pair_transforms = create_pair_transforms(target_size, flip_prob=0.0)
 input_transforms = create_input_transforms(ratio_min_dist=0.5,
-                                      range_vignette=(0.1, 1.5),
+                                      range_vignette=(0.2, 1.0),
                                       std_cap=0.08
                                       )
 
@@ -43,25 +45,17 @@ def to_pil_image(tensor):
     return img
 
 # Display the original and transformed images
-fig, axes = plt.subplots(1, 3, figsize=(12, 4))
+fig, axes = plt.subplots(1, 2, figsize=(12, 4))
 
 # Original Distorted Image
 axes[0].imshow(to_pil_image(distorted_image.cpu()))
 axes[0].set_title('Original Distorted Image')
 axes[0].axis('off')
 
-# Convert distorted_image to a PIL Image before applying custom_transforms
-distorted_image = to_pil_image(distorted_image.cpu())
-print("distorted_image converted to PIL")
-# Apply custom_transforms on the PIL Image
-# transformed_image = input_transforms(distorted_image)
-# axes[1].imshow(transformed_image.permute(1, 2, 0))
-# axes[1].set_title('Transformed Image')
-# axes[1].axis('off')
 
 # Original Undistorted Image
-axes[2].imshow(to_pil_image(undistorted_image.cpu()))
-axes[2].set_title('Original Undistorted Image')
-axes[2].axis('off')
+axes[1].imshow(to_pil_image(undistorted_image.cpu()))
+axes[1].set_title('Original Undistorted Image')
+axes[1].axis('off')
 print("about to show images")
 plt.show()

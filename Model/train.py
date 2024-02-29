@@ -27,10 +27,13 @@ batch_size = 16
 learning_rate = 0.0002
 num_epochs = 100
 
-# Initialize data loader
-train_dataset = GetTrainingPairs(root=dataset_path, dataset_name='EUVP',
-                                 input_transforms_=input_transforms, pair_transforms=pair_transforms)
-train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=4)
+target_size=(256, 256)
+
+pair_transforms = create_pair_transforms(target_size, flip_prob=0.0)
+input_transforms = create_input_transforms(ratio_min_dist=0.5,
+                                      range_vignette=(0.2, 1.0),
+                                      std_cap=0.08
+                                      )
 
 
 # Initialize models and loss function
