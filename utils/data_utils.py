@@ -17,9 +17,12 @@ class GetTrainingPairs(Dataset):
         img_A = transforms.ToTensor()(Image.open(self.filesA[index % self.len]))
         img_B = transforms.ToTensor()(Image.open(self.filesB[index % self.len]))
 
-        if self.transforms:
-            img_A = self.pair_transforms(self.input_transforms_(img_A))
+        if self.pair_transforms:
+            img_A = self.pair_transforms(img_A)
             img_B = self.pair_transforms(img_B)
+
+        if self.input_transforms:
+            img_A = self.input_transforms(img_A)
 
         return {"A": img_A, "B": img_B}
 

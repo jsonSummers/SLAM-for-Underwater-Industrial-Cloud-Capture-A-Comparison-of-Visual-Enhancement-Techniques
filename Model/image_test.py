@@ -1,32 +1,31 @@
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
-from utils.data_utils import GetTrainingPairs  # Import your data loader
-from generator import Generator
-from discriminator import Discriminator
-from utils.losses import TripletLoss  # Import your loss function
-from torch.optim import Adam
+from utils.data_utils import GetTrainingPairs
 from torchvision import transforms
-from utils.transforms import create_input_transforms
+from utils.transforms import create_input_transforms, create_pair_transforms
 import os
+os.environ["KMP_DUPLICATE_LIB_OK"]="TRUE"
 import matplotlib.pyplot as plt
 from PIL import Image
 
 # Check for GPU availability
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-dataset_path = os.getcwd() + '/../Data/'
+dataset_path = os.getcwd() + '\\..\\Data\\Paired'
+#dataset_path = os.getcwd() + '/../Data/'
 
-custom_transforms = create_input_transforms(ratio_min_dist=0.5,
+pair_transforms = create_pair_transforms(flip_prob=0.5)
+input_transforms = create_input_transforms(ratio_min_dist=0.5,
                                       range_vignette=(0.1, 1.5),
                                       std_cap=0.08
                                       )
 
-test_dataset = GetTrainingPairs(root=dataset_path, dataset_name='EUVP', transforms_=None)
+test_dataset = GetTrainingPairs(root=dataset_path, dataset_name='EUVP', input_transforms_=input_transforms,
+                                pair_transforms=pair_transforms)
 test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=1, shuffle=True, num_workers=0)
 
 print("loader created")
-# Fetch a batch from the data loader
 batch = next(iter(test_loader))
 print("batch created")
 
@@ -53,16 +52,16 @@ axes[0].axis('off')
 
 # Convert distorted_image to a PIL Image before applying custom_transforms
 distorted_image = to_pil_image(distorted_image.cpu())
-
+print("distorted_image converted to PIL")
 # Apply custom_transforms on the PIL Image
-transformed_image = custom_transforms(distorted_image)
-axes[1].imshow(transformed_image.permute(1, 2, 0))
-axes[1].set_title('Transformed Image')
-axes[1].axis('off')
+# transformed_image = input_transforms(distorted_image)
+# axes[1].imshow(transformed_image.permute(1, 2, 0))
+# axes[1].set_title('Transformed Image')
+# axes[1].axis('off')
 
 # Original Undistorted Image
 axes[2].imshow(to_pil_image(undistorted_image.cpu()))
 axes[2].set_title('Original Undistorted Image')
 axes[2].axis('off')
-
+print("about to show images")
 plt.show()
