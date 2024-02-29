@@ -14,13 +14,17 @@ from PIL import Image
 
 # Check for GPU availability
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-input_transforms = create_input_transforms(ratio_min_dist=0.5,
-                                      range_vignette=(0.1, 1.5),
-                                      std_cap=0.08
-                                      )
-pair_transforms = create_pair_transforms(flip_prob=0.5)
 
-dataset_path = os.getcwd() + '/../Data/'
+dataset_path = os.getcwd() + '\\..\\Data\\Paired'
+#dataset_path = os.getcwd() + '/../Data/'
+
+target_size=(256, 256)
+
+pair_transforms = create_pair_transforms(target_size, flip_prob=0.5)
+input_transforms = create_input_transforms(ratio_min_dist=0.5,
+                                      range_vignette=(0.2, 1.0),
+                                      std_cap=0.05
+                                      )
 
 # Hyperparameters
 batch_size = 16

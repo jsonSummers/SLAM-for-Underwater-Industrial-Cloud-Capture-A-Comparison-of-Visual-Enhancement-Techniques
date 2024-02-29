@@ -17,10 +17,10 @@ dataset_path = os.getcwd() + '\\..\\Data\\Paired'
 
 target_size=(256, 256)
 
-pair_transforms = create_pair_transforms(target_size, flip_prob=0.0)
+pair_transforms = create_pair_transforms(target_size, flip_prob=0.5)
 input_transforms = create_input_transforms(ratio_min_dist=0.5,
                                       range_vignette=(0.2, 1.0),
-                                      std_cap=0.08
+                                      std_cap=0.05
                                       )
 
 test_dataset = GetTrainingPairs(root=dataset_path, dataset_name='EUVP', input_transforms_=input_transforms,

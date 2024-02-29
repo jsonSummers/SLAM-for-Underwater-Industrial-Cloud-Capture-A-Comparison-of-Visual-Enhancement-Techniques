@@ -15,10 +15,8 @@ class GetTrainingPairs(Dataset):
 
     def __getitem__(self, index):
         img_A = transforms.ToTensor()(Image.open(self.filesA[index % self.len])).float()
-        img_B = transforms.ToTensor()(Image.open(self.filesA[index % self.len])).float()
-        #img_B = transforms.ToTensor()(Image.open(self.filesB[index % self.len])).float()
-        print(f"Image A - Shape: {img_A.shape}, Min: {img_A.min()}, Max: {img_A.max()}")
-        print(f"Image B - Shape: {img_B.shape}, Min: {img_B.min()}, Max: {img_B.max()}")
+        #img_B = transforms.ToTensor()(Image.open(self.filesA[index % self.len])).float()
+        img_B = transforms.ToTensor()(Image.open(self.filesB[index % self.len])).float()
 
         if self.pair_transforms:
             img_A = self.pair_transforms(img_A)

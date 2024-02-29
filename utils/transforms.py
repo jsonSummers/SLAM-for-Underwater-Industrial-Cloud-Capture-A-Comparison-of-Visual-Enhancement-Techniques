@@ -37,16 +37,18 @@ class AddVignette(object):
         return image
 
 
-
 class GaussianNoise(object):
-    def __init__(self, center=0, std_cap=0.1):
+    def __init__(self, center=0, std_cap=0.001):
         self.center = center
         self.std_cap = std_cap
 
     def __call__(self, image):
         random_std = np.random.uniform(0, self.std_cap)
         noise = np.random.normal(self.center, random_std, image.shape)
-        image = image + noise
+
+        # Clip pixel values to stay within [0, 1]
+        image = np.clip(image + noise, 0, 1)
+
         return image
 
 
@@ -54,7 +56,7 @@ def create_input_transforms(ratio_min_dist=0.2, range_vignette=(0.2, 0.8), std_c
     return [
         #transforms.ToTensor(),
         AddVignette(ratio_min_dist, range_vignette),
-        GaussianNoise(std_cap),
+        GaussianNoise(std_cap=std_cap),
     ]
 
 
