@@ -1,28 +1,30 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import torchvision.models as models
 from torch.utils.data import DataLoader
 from torchvision.utils import save_image
-from model import Generator, Discriminator, ModelConfig  # Assuming you've saved the models in a file named model.py
-from utils.losses import adversarial_loss, triplet_loss
-import os
+from model import Generator, Discriminator, ModelConfig
+from utils.losses import adversarial_loss, l1_loss, content_loss, triplet_loss  # Adjust the import statements
 from utils.data_utils import GetTrainingPairs
 from utils.transforms import create_pair_transforms, create_input_transforms
+import os
 
 # Check for GPU availability
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using {device}")
 print(torch.cuda.is_available())
+torch.cuda.empty_cache()
 
-
-dataset_path = os.getcwd() + '\\..\\Data\\Paired'
-#dataset_path = os.getcwd() + '/../Data/'
+#dataset_path = os.getcwd() + '\\..\\Data\\Paired'
+dataset_path = os.getcwd() + '/../Data/Paired'
+print("cwd is:" + dataset_path)
 
 # Hyperparameters
 target_size = (256, 256)
 config = ModelConfig(in_channels=3, out_channels=3, num_filters=64)
-batch_size = 16
-learning_rate = 0.0002
+batch_size = 32
+learning_rate = 0.002
 num_epochs = 100
 
 
@@ -30,9 +32,16 @@ num_epochs = 100
 generator = Generator(config).to(device)
 discriminator = Discriminator(config).to(device)
 
+vgg_weights_path = './vgg19-dcbb9e9d.pth'
+vgg_model = models.vgg19(pretrained=False)  # Set pretrained to False because you're providing your own weights
+vgg_model.load_state_dict(torch.load(vgg_weights_path))
+vgg_model.eval().to(device)
+
+
 # Define optimization criteria and optimizers
 criterion_adversarial = nn.BCEWithLogitsLoss()
-criterion_triplet = triplet_loss  # You need to define triplet_loss in your losses.py
+
+
 optimizer_generator = optim.Adam(generator.parameters(), lr=learning_rate)
 optimizer_discriminator = optim.Adam(discriminator.parameters(), lr=learning_rate)
 
@@ -46,10 +55,13 @@ input_transforms = create_input_transforms(ratio_min_dist=0.5,
 # Initialize data loader
 train_dataset = GetTrainingPairs(root=dataset_path, dataset_name='EUVP',
                                  input_transforms_=input_transforms, pair_transforms=pair_transforms)
-train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=0)
+
+dataset_length = len(train_dataset)
+print(f"Number of samples in the dataset: {dataset_length}")
+
+train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=4)
 
 print("training data loaded")
-torch.autograd.set_detect_anomaly(True)
 
 # Training loop
 for epoch in range(num_epochs):
@@ -66,11 +78,17 @@ for epoch in range(num_epochs):
         # Adversarial loss for the generator
         adv_loss = adversarial_loss(discriminator(generated_images), True)
 
+        # L1 loss for the generator
+        l1_loss_val = l1_loss(generated_images, target_images)
+
+        # Content loss for the generator
+        content_loss_val = content_loss(vgg_model, generated_images, target_images)
+
         # Triplet loss for the encoder-decoder
-        triplet_loss_val = criterion_triplet(generated_images, target_images, input_images)
+        triplet_loss_val = triplet_loss(generated_images, target_images, input_images)
 
         # Total loss for the generator
-        generator_loss = adv_loss + triplet_loss_val
+        generator_loss = adv_loss + l1_loss_val + content_loss_val + triplet_loss_val
 
         # Backward pass and optimization for the generator
         generator_loss.backward()
