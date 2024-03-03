@@ -11,9 +11,12 @@ from utils.transforms import create_pair_transforms, create_input_transforms
 
 # Check for GPU availability
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(f"Using {device}")
+print(torch.cuda.is_available())
 
-#dataset_path = os.getcwd() + '\\..\\Data\\Paired'
-dataset_path = os.getcwd() + '/../Data/'
+
+dataset_path = os.getcwd() + '\\..\\Data\\Paired'
+#dataset_path = os.getcwd() + '/../Data/'
 
 # Hyperparameters
 target_size = (256, 256)
@@ -52,36 +55,36 @@ torch.autograd.set_detect_anomaly(True)
 for epoch in range(num_epochs):
     for i, batch in enumerate(train_loader):
         input_images, target_images = batch['input'].to(device), batch['target'].to(device)
-        print("batch loaded")
+
         # Zero the gradients for both the generator and discriminator
         optimizer_generator.zero_grad()
         optimizer_discriminator.zero_grad()
-        print("gradients zeroed")
+
         # Forward pass through the generator
         generated_images = generator(input_images)
-        print("forward pass through generator")
+
         # Adversarial loss for the generator
         adv_loss = adversarial_loss(discriminator(generated_images), True)
-        print("adversarial loss for the generator")
+
         # Triplet loss for the encoder-decoder
         triplet_loss_val = criterion_triplet(generated_images, target_images, input_images)
-        print("triplet loss for the encoder-decoder")
+
         # Total loss for the generator
         generator_loss = adv_loss + triplet_loss_val
-        print("total loss for the generator")
+
         # Backward pass and optimization for the generator
         generator_loss.backward()
         optimizer_generator.step()
-        print("backward pass and optimization for the generator")
+
         # Adversarial loss for the discriminator
         real_loss = adversarial_loss(discriminator(target_images), True)
         fake_loss = adversarial_loss(discriminator(generated_images.detach()), False)
         discriminator_loss = (real_loss + fake_loss) / 2.0
-        print("adversarial loss for the discriminator")
+
         # Backward pass and optimization for the discriminator
         discriminator_loss.backward()
         optimizer_discriminator.step()
-        print("backward pass and optimization for the discriminator")
+
         # Print statistics
         if i % 10 == 0:
             print(f"Epoch [{epoch}/{num_epochs}], Batch [{i}/{len(train_loader)}], "
