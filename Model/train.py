@@ -17,7 +17,8 @@ print(torch.cuda.is_available())
 torch.cuda.empty_cache()
 
 #dataset_path = os.getcwd() + '\\..\\Data\\Paired'
-dataset_path = os.getcwd() + '/../Data/Paired'
+#dataset_path = os.getcwd() + '/../Data/Paired'
+dataset_path = os.getcwd() + '/../Data'
 print("cwd is:" + dataset_path)
 
 # Hyperparameters

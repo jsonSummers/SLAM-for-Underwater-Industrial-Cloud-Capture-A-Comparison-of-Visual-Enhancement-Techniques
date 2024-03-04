@@ -16,9 +16,8 @@ class ConvBlock(nn.Module):
 
         x = self.conv(x)
         x = self.batchnorm(x)
-        x = F.relu(x)
+        x = F.leaky_relu(x, negative_slope=0.2)  # Leaky ReLU
         return x
-
 
 class ResidualBlock(nn.Module):
     def __init__(self, num_filters):
@@ -29,6 +28,6 @@ class ResidualBlock(nn.Module):
 
     def forward(self, x):
         residual = self.conv1(x)
-        residual = F.relu(residual)
+        residual = F.leaky_relu(residual, negative_slope=0.2)  # Leaky ReLU
         x = self.conv2(x + residual)
         return x
