@@ -24,8 +24,8 @@ print("cwd is:" + dataset_path)
 target_size = (256, 256)
 config = ModelConfig(in_channels=3, out_channels=3, num_filters=64)
 batch_size = 32
-learning_rate = 0.002
-num_epochs = 100
+learning_rate = 0.001
+num_epochs = 64
 
 
 # Initialize the models
@@ -48,7 +48,7 @@ optimizer_discriminator = optim.Adam(discriminator.parameters(), lr=learning_rat
 
 pair_transforms = create_pair_transforms(target_size, flip_prob=0.5)
 input_transforms = create_input_transforms(ratio_min_dist=0.5,
-                                           range_vignette=(0.2, 1.0),
+                                           range_vignette=(0.0, 1.0),
                                            std_cap=0.05
                                            )
 
