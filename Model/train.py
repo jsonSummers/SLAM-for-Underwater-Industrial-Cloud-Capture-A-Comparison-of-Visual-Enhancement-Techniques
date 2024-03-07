@@ -1,14 +1,17 @@
+# train.py
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import torchvision.models as models
 from torch.utils.data import DataLoader
 from torchvision.utils import save_image
-from model import Generator, Discriminator, ModelConfig
-from utils.losses import adversarial_loss, l1_loss, content_loss, triplet_loss  # Adjust the import statements
+from model import Enhancer, Discriminator, ModelConfig
+from utils.losses import adversarial_loss, l1_loss, content_loss, poly_loss
 from utils.data_utils import GetTrainingPairs
 from utils.transforms import create_pair_transforms, create_input_transforms
 import os
+import numpy as np
 
 # Check for GPU availability
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -17,24 +20,24 @@ print(torch.cuda.is_available())
 torch.cuda.empty_cache()
 
 #dataset_path = os.getcwd() + '\\..\\Data\\Paired'
-#dataset_path = os.getcwd() + '/../Data/Paired'
-dataset_path = os.getcwd() + '/../Data'
+dataset_path = os.getcwd() + '/../Data/Paired'
+#dataset_path = os.getcwd() + '/../Data'
 print("cwd is:" + dataset_path)
 
 # Hyperparameters
 target_size = (256, 256)
 config = ModelConfig(in_channels=3, out_channels=3, num_filters=64)
 batch_size = 32
-learning_rate = 0.001
+learning_rate = 0.0003
 num_epochs = 64
 
 
 # Initialize the models
-generator = Generator(config).to(device)
+enhancer = Enhancer(config).to(device)
 discriminator = Discriminator(config).to(device)
 
 vgg_weights_path = './vgg19-dcbb9e9d.pth'
-vgg_model = models.vgg19(pretrained=False)  # Set pretrained to False because you're providing your own weights
+vgg_model = models.vgg19(pretrained=False)
 vgg_model.load_state_dict(torch.load(vgg_weights_path))
 vgg_model.eval().to(device)
 
@@ -43,7 +46,7 @@ vgg_model.eval().to(device)
 criterion_adversarial = nn.BCEWithLogitsLoss()
 
 
-optimizer_generator = optim.Adam(generator.parameters(), lr=learning_rate)
+optimizer_enhancer = optim.Adam(enhancer.parameters(), lr=learning_rate)
 optimizer_discriminator = optim.Adam(discriminator.parameters(), lr=learning_rate)
 
 
@@ -64,40 +67,41 @@ train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, nu
 
 print("training data loaded")
 
+def inverse_normalize(image):
+    # Assuming the original range was [0, 1]
+    image = image * 255.0
+    # Clip values to ensure they are within valid range [0, 255]
+    image = torch.clip(image, 0, 255).cpu().numpy()
+    # Convert to uint8 if necessary
+    image = image.astype(np.uint8)
+    return image
+
 # Training loop
 for epoch in range(num_epochs):
     for i, batch in enumerate(train_loader):
         input_images, target_images = batch['input'].to(device), batch['target'].to(device)
 
-        # Zero the gradients for both the generator and discriminator
-        optimizer_generator.zero_grad()
+        # Zero the gradients for both the enhancer and discriminator
+        optimizer_enhancer.zero_grad()
         optimizer_discriminator.zero_grad()
 
-        # Forward pass through the generator
-        generated_images = generator(input_images)
+        # Enhancer forward pass
+        enhanced_images = enhancer(input_images)
+        adv_loss = adversarial_loss(discriminator(enhanced_images), True)
+        l1_loss_val = l1_loss(enhanced_images, target_images)
+        content_loss_val = content_loss(vgg_model, enhanced_images, target_images)
+        poly_loss_val = poly_loss(enhanced_images, target_images, 1)
 
-        # Adversarial loss for the generator
-        adv_loss = adversarial_loss(discriminator(generated_images), True)
+        # Total loss for the enhancer
+        enhancer_loss = adv_loss + l1_loss_val + content_loss_val + poly_loss_val
 
-        # L1 loss for the generator
-        l1_loss_val = l1_loss(generated_images, target_images)
+        # Backward pass and optimization for the enhancer
+        enhancer_loss.backward()
+        optimizer_enhancer.step()
 
-        # Content loss for the generator
-        content_loss_val = content_loss(vgg_model, generated_images, target_images)
-
-        # Triplet loss for the encoder-decoder
-        triplet_loss_val = triplet_loss(generated_images, target_images, input_images)
-
-        # Total loss for the generator
-        generator_loss = adv_loss + l1_loss_val + content_loss_val + triplet_loss_val
-
-        # Backward pass and optimization for the generator
-        generator_loss.backward()
-        optimizer_generator.step()
-
-        # Adversarial loss for the discriminator
+        # Adversarial forward pass
         real_loss = adversarial_loss(discriminator(target_images), True)
-        fake_loss = adversarial_loss(discriminator(generated_images.detach()), False)
+        fake_loss = adversarial_loss(discriminator(enhanced_images.detach()), False)
         discriminator_loss = (real_loss + fake_loss) / 2.0
 
         # Backward pass and optimization for the discriminator
@@ -107,13 +111,13 @@ for epoch in range(num_epochs):
         # Print statistics
         if i % 10 == 0:
             print(f"Epoch [{epoch}/{num_epochs}], Batch [{i}/{len(train_loader)}], "
-                  f"Generator Loss: {generator_loss.item():.4f}, Discriminator Loss: {discriminator_loss.item():.4f}")
+                  f"Generator Loss: {enhancer_loss.item():.4f}, Discriminator Loss: {discriminator_loss.item():.4f}")
 
-    # Save generated images at the end of each epoch
+    # Save enhanced images at the end of each epoch
     with torch.no_grad():
-        generated_samples = generator(input_images)
-        save_image(generated_samples, f"generated_samples_epoch_{epoch}.png", normalize=True)
+        enhanced_samples = inverse_normalize(enhancer(input_images))
+        save_image(enhanced_samples, f"enhanced_samples_epoch_{epoch}.png", normalize=True)
 
 # Save the trained models
-torch.save(generator.state_dict(), "generator.pth")
+torch.save(enhancer.state_dict(), "enhancer.pth")
 torch.save(discriminator.state_dict(), "discriminator.pth")

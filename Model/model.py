@@ -49,9 +49,9 @@ class Decoder(nn.Module):
         return x
 
 
-class Generator(nn.Module):
+class Enhancer(nn.Module):
     def __init__(self, config):
-        super(Generator, self).__init__()
+        super(Enhancer, self).__init__()
 
         self.encoder = Encoder(config)
         self.decoder = Decoder(config)
