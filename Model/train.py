@@ -27,9 +27,9 @@ print("cwd is:" + dataset_path)
 # Hyperparameters
 target_size = (256, 256)
 config = ModelConfig(in_channels=3, out_channels=3, num_filters=64)
-batch_size = 32
+batch_size = 48
 learning_rate = 0.0003
-num_epochs = 64
+num_epochs = 100
 
 
 # Initialize the models
@@ -52,7 +52,7 @@ optimizer_discriminator = optim.Adam(discriminator.parameters(), lr=learning_rat
 
 pair_transforms = create_pair_transforms(target_size, flip_prob=0.5)
 input_transforms = create_input_transforms(ratio_min_dist=0.5,
-                                           range_vignette=(0.0, 1.0),
+                                           range_vignette=(0.0, 0.7),
                                            std_cap=0.05
                                            )
 
@@ -71,9 +71,9 @@ def inverse_normalize(image):
     # Assuming the original range was [0, 1]
     image = image * 255.0
     # Clip values to ensure they are within valid range [0, 255]
-    image = torch.clip(image, 0, 255).cpu().numpy()
+    image = torch.clip(image, 0, 255).cpu()
     # Convert to uint8 if necessary
-    image = image.astype(np.uint8)
+    #image = image.dtype(torch.uint8)
     return image
 
 # Training loop
@@ -90,7 +90,7 @@ for epoch in range(num_epochs):
         adv_loss = adversarial_loss(discriminator(enhanced_images), True)
         l1_loss_val = l1_loss(enhanced_images, target_images)
         content_loss_val = content_loss(vgg_model, enhanced_images, target_images)
-        poly_loss_val = poly_loss(enhanced_images, target_images, 1)
+        poly_loss_val = poly_loss(enhanced_images, target_images, 2)
 
         # Total loss for the enhancer
         enhancer_loss = adv_loss + l1_loss_val + content_loss_val + poly_loss_val
@@ -115,8 +115,9 @@ for epoch in range(num_epochs):
 
     # Save enhanced images at the end of each epoch
     with torch.no_grad():
-        enhanced_samples = inverse_normalize(enhancer(input_images))
-        save_image(enhanced_samples, f"enhanced_samples_epoch_{epoch}.png", normalize=True)
+        enhanced_samples = enhancer(input_images)
+        side_by_side = torch.cat((input_images.cpu(), enhanced_samples.cpu()), dim=3)
+        save_image(side_by_side, f"enhanced_samples_epoch_{epoch}.png", normalize=False)
 
 # Save the trained models
 torch.save(enhancer.state_dict(), "enhancer.pth")
