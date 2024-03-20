@@ -26,8 +26,12 @@ print("cwd is:" + dataset_path)
 
 # Hyperparameters
 target_size = (256, 256)
-config = ModelConfig(in_channels=3, out_channels=3, num_filters=64)
-batch_size = 48
+config = ModelConfig(in_channels=3,
+                     out_channels=3,
+                     num_filters=32,
+                     kernel_size=4,
+                     stride=2)
+batch_size = 32
 learning_rate = 0.0003
 num_epochs = 100
 
@@ -52,7 +56,7 @@ optimizer_discriminator = optim.Adam(discriminator.parameters(), lr=learning_rat
 
 pair_transforms = create_pair_transforms(target_size, flip_prob=0.5)
 input_transforms = create_input_transforms(ratio_min_dist=0.5,
-                                           range_vignette=(0.0, 0.7),
+                                           range_vignette=(0.1, 1.0),
                                            std_cap=0.05
                                            )
 
@@ -67,6 +71,7 @@ train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, nu
 
 print("training data loaded")
 
+
 def inverse_normalize(image):
     # Assuming the original range was [0, 1]
     image = image * 255.0
@@ -75,6 +80,9 @@ def inverse_normalize(image):
     # Convert to uint8 if necessary
     #image = image.dtype(torch.uint8)
     return image
+
+
+checkpoint_frequency = 5
 
 # Training loop
 for epoch in range(num_epochs):
@@ -118,6 +126,10 @@ for epoch in range(num_epochs):
         enhanced_samples = enhancer(input_images)
         side_by_side = torch.cat((input_images.cpu(), enhanced_samples.cpu()), dim=3)
         save_image(side_by_side, f"enhanced_samples_epoch_{epoch}.png", normalize=False)
+
+    if epoch % checkpoint_frequency == 0:
+        torch.save(enhancer.state_dict(), f"enhancer_epoch_{epoch}.pth")
+        torch.save(discriminator.state_dict(), f"discriminator_epoch_{epoch}.pth")
 
 # Save the trained models
 torch.save(enhancer.state_dict(), "enhancer.pth")
