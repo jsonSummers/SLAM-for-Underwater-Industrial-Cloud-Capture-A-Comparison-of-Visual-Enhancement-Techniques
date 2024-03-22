@@ -7,7 +7,8 @@ import torch.nn.functional as F
 class ConvBlock(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size=3, stride=1, padding=1):
         super(ConvBlock, self).__init__()
-        self.conv = nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding = padding, padding_mode='reflect')
+        self.conv = nn.Conv2d(in_channels, out_channels, kernel_size, stride,
+                              padding = padding, padding_mode='reflect')
         self.batchnorm = nn.BatchNorm2d(out_channels)
 
     def forward(self, x):
@@ -15,6 +16,23 @@ class ConvBlock(nn.Module):
         x = x.to(self.batchnorm.weight.dtype)
 
         x = self.conv(x)
+        x = self.batchnorm(x)
+        x = F.leaky_relu(x, negative_slope=0.2)  # Leaky ReLU
+        return x
+
+
+class ConvTBlock(nn.Module):
+    def __init__(self, in_channels, out_channels, kernel_size=3, stride=1, padding=1):
+        super(ConvTBlock, self).__init__()
+        self.conv_transpose = nn.ConvTranspose2d(in_channels, out_channels, kernel_size, stride,
+                                                 padding=padding, padding_mode='zeros')
+        self.batchnorm = nn.BatchNorm2d(out_channels)
+
+    def forward(self, x):
+        # Convert input tensor to the same data type as the bias tensor
+        x = x.to(self.batchnorm.weight.dtype)
+
+        x = self.conv_transpose(x)
         x = self.batchnorm(x)
         x = F.leaky_relu(x, negative_slope=0.2)  # Leaky ReLU
         return x

@@ -1,7 +1,7 @@
 # model.py
 
 import torch.nn as nn
-from utils.modules import ConvBlock, ResidualBlock
+from utils.modules import ConvBlock, ConvTBlock, ResidualBlock
 
 
 class ModelConfig:
@@ -37,11 +37,11 @@ class Decoder(nn.Module):
     def __init__(self, config):
         super(Decoder, self).__init__()
 
-        self.d1 = nn.ConvTranspose2d(config.num_filters * 4, config.num_filters * 2, kernel_size=config.kernel_size, stride=config.stride, padding=config.padding, padding_mode='zeros')
+        self.d1 = ConvTBlock(config.num_filters * 4, config.num_filters * 2, kernel_size=config.kernel_size, stride=config.stride, padding=config.padding)
         self.d2 = ResidualBlock(config.num_filters * 2)
-        self.d3 = nn.ConvTranspose2d(config.num_filters * 2, config.num_filters, kernel_size=config.kernel_size, stride=config.stride, padding=config.padding, padding_mode='zeros')
+        self.d3 = ConvTBlock(config.num_filters * 2, config.num_filters, kernel_size=config.kernel_size, stride=config.stride, padding=config.padding)
         self.d4 = ResidualBlock(config.num_filters)
-        self.d5 = nn.ConvTranspose2d(config.num_filters, config.out_channels, kernel_size=config.kernel_size, stride=config.stride, padding=config.padding, padding_mode='zeros')
+        self.d5 = ConvTBlock(config.num_filters, config.out_channels, kernel_size=config.kernel_size, stride=config.stride, padding=config.padding)
 
     def forward(self, x, skips):
         x = self.d1(x)
