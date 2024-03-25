@@ -147,54 +147,58 @@ def build_batch_embedding_matrix(positive_embeddings, negative_embeddings):
     # Combine positive and negative embeddings into a single tensor
     all_embeddings = torch.cat((positive_embeddings.unsqueeze(1), negative_embeddings_tensor), dim=1)
     print('all_embeddings shape:', all_embeddings.shape)
+
     return all_embeddings
 
 
-def build_distance_matrix(positive_embeddings, negative_embeddings, num_extreme_negatives):
-    all_embeddings = build_batch_embedding_matrix(positive_embeddings, negative_embeddings)
+def build_slice_distance_matrix(all_embeddings, slice_index):
+    reshaped_matrices = all_embeddings[slice_index].view(4, -1)
+    print('reshaped_matrices shape:', reshaped_matrices.shape)
 
-    batch_size, num_samples, embedding_size = all_embeddings.size()
-
-    # Reshape embeddings to make computations easier
-    reshaped_embeddings = all_embeddings.view(batch_size * num_samples, embedding_size)
-
-    # Compute pairwise distances using broadcasting
-    pairwise_distances = torch.cdist(reshaped_embeddings, reshaped_embeddings)
-
-    # Reshape the pairwise distances back to a 4D tensor
-    pairwise_distances = pairwise_distances.view(batch_size, num_samples, batch_size, num_samples)
-
-    # Print for debugging
-    print('pairwise_distances shape:', pairwise_distances.shape)
-
-    # Now we need to compute the distances for each pair of embeddings for each slice
-    # In the batch to find the extreme negatives
-    extreme_negatives = []
-    for i in range(batch_size):
-        distances_slice = pairwise_distances[i]
-        extreme_negatives_slice = find_extreme_negatives(distances_slice, num_extreme_negatives)
-        extreme_negatives.append(extreme_negatives_slice)
-
-    extreme_negatives = torch.stack(extreme_negatives, dim=0)
-
-    return extreme_negatives
-
-    return extreme_negatives
+    distances = torch.cdist(reshaped_matrices, reshaped_matrices, p=2)
+    print('distances shape:', distances.shape)
+    return distances
 
 
-def find_extreme_negatives(distance_matrix, num_extreme_negatives):
-    return distance_matrix  # Placeholder for actual implementation
+def build_distance_matrix(all_embeddings):
+    batch_size = all_embeddings.shape[0]
+    num_positive_and_negatives = all_embeddings.shape[1]
+    embedding_dimensions = all_embeddings.shape[1:]
+    # Reshape the tensor to merge the first two dimensions
+    merged_tensor = all_embeddings.view(-1, embedding_dimensions[0], embedding_dimensions[1], embedding_dimensions[2])
+
+    reshaped_tensor = merged_tensor.view(batch_size, num_positive_and_negatives, -1)
+
+    # Calculate pairwise distances
+    distances = torch.cdist(reshaped_tensor, reshaped_tensor, p=2)
+
+    all_distances = distances.view(batch_size, num_positive_and_negatives, num_positive_and_negatives)
+
+    return all_distances
 
 
 def poly_loss(targets, anchors, encoder, num_extreme_negatives, num_negatives):
-
     # Generate negative batch
     negatives = generate_negatives(anchors, num_negatives)
-
     # Encode target, anchor, and negatives
     target_embedding, _ = encoder(targets)
-    anchor_embedding, _ = encoder(anchors)
-    negative_embeddings = [encoder(negative)[0] for negative in negatives]
+    # anchor_embedding, _ = encoder(anchors)
+    # negative_embeddings = [encoder(negative)[0] for negative in negatives]
+
+    all_embeddings = build_batch_embedding_matrix(encoder(anchors)[0], [encoder(negative)[0] for negative in negatives])
+
+    distance_matrix = build_distance_matrix(all_embeddings)
+    print('distance_matrix shape:', distance_matrix.shape)
+
+
+    stop
+
+
+
+    total_matrix = create_total_distance_matrix(all_embeddings)
+    print('total_matrix shape:', total_matrix.shape)
+
+
 
     # Build distance matrix
     distance_matrix = build_distance_matrix(anchor_embedding, negative_embeddings, num_extreme_negatives)
