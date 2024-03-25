@@ -54,15 +54,20 @@ batch_size = 32
 learning_rate = 0.0003
 num_epochs = 100
 
+lambda_l1 = 0.7
+lambda_con = 0.3
+lambda_poly = 1.0
+
 
 # Initialize the models
 enhancer = Enhancer(config).to(device)
 discriminator = Discriminator(config).to(device)
 
-vgg_weights_path = './vgg19-dcbb9e9d.pth'
-vgg_model = models.vgg19(pretrained=False)
-vgg_model.load_state_dict(torch.load(vgg_weights_path))
-vgg_model.eval().to(device)
+
+# vgg_weights_path = './vgg19-dcbb9e9d.pth'
+# vgg_model = models.vgg19(pretrained=False)
+# vgg_model.load_state_dict(torch.load(vgg_weights_path))
+# vgg_model.eval().to(device)
 
 
 # Define optimization criteria and optimizers
@@ -100,11 +105,7 @@ checkpoint_frequency = 5
 
 def train(num_negatives, save_path):
 
-    experiment_name = os.path.basename(save_path.rstrip('/'))
-    save_path = os.path.join(save_path, experiment_name)
-
-    # Create directories for checkpoints, final weights, and images
-    os.makedirs(os.path.join(save_path, 'checkpoints'), exist_ok=True)
+    os.makedirs(os.path.join(save_path, 'checkpoints', 'enhancer'), exist_ok=True)
     os.makedirs(os.path.join(save_path, 'final_weights'), exist_ok=True)
     os.makedirs(os.path.join(save_path, 'images'), exist_ok=True)
 
@@ -121,9 +122,15 @@ def train(num_negatives, save_path):
             enhanced_images = enhancer(input_images)
             adv_loss = adversarial_loss(discriminator(enhanced_images), True)
             l1_loss_val = l1_loss(enhanced_images, target_images)
-            content_loss_val = content_loss(vgg_model, enhanced_images, target_images)
-            poly_loss_val = poly_loss(enhanced_images, target_images, number_of_negatives=num_negatives)
-            enhancer_loss = adv_loss + l1_loss_val + content_loss_val + poly_loss_val
+            #content_loss_val = content_loss(vgg_model, enhanced_images, target_images)
+            #poly_loss_val = poly_loss(enhanced_images, target_images,
+                                      #encoder=enhancer.encoder, num_negatives=num_negatives)
+
+            content_loss_val = content_loss(enhanced_images, target_images)
+
+            poly_loss_val = poly_loss(target_images, enhanced_images, encoder=enhancer.encoder,
+                                      num_extreme_negatives=num_negatives, num_negatives=(num_negatives + 2))
+            enhancer_loss = adv_loss + lambda_l1 * l1_loss_val + lambda_con * content_loss_val + lambda_poly * poly_loss_val
 
             # Backward pass and optimization for the enhancer
             enhancer_loss.backward()
@@ -152,13 +159,14 @@ def train(num_negatives, save_path):
                 enhanced_samples = enhancer(input_images)
                 side_by_side_input = torch.cat((input_images.cpu(), target_images.cpu()), dim=3)
                 side_by_side = torch.cat((side_by_side_input, enhanced_samples.cpu()), dim=3)
-                save_image(side_by_side, f"evaluation_samples_seed_{seed}_epoch_{epoch}.png", normalize=False)
+                save_image(side_by_side, os.path.join(save_path, f"images/evaluation_samples_seed_{seed}_epoch_{epoch}.png"), normalize=False)
                 writer.add_images('Original vs. Enhanced', side_by_side, epoch)
 
             if epoch % checkpoint_frequency == 0:
-                torch.save(enhancer.state_dict(), os.path.join(save_path, f"checkpoints/enhancer_epoch_{epoch}.pth"))
+                torch.save(enhancer.state_dict(), os.path.join(save_path,
+                                                               f"checkpoints/enhancer/enhancer_epoch_{epoch}.pth"))
                 torch.save(discriminator.state_dict(),
-                           os.path.join(save_path, f"checkpoints/discriminator_epoch_{epoch}.pth"))
+                           os.path.join(save_path, f"checkpoints/discriminator/discriminator_epoch_{epoch}.pth"))
 
         # Save the trained models
         torch.save(enhancer.state_dict(), os.path.join(save_path, "final_weights/enhancer.pth"))
