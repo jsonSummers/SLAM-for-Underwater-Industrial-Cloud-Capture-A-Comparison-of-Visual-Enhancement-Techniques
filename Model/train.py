@@ -40,7 +40,7 @@ torch.cuda.manual_seed(seed)
 np.random.seed(seed)
 writer = SummaryWriter()
 
-# Define the number of evaluation pairs you want to extract
+# Define the number of evaluation pairs
 num_evaluation_pairs = 5
 
 # Hyperparameters
@@ -105,6 +105,8 @@ checkpoint_frequency = 5
 
 def train(num_negatives, save_path):
 
+    num_negatives = 2
+
     os.makedirs(os.path.join(save_path, 'checkpoints', 'enhancer'), exist_ok=True)
     os.makedirs(os.path.join(save_path, 'final_weights'), exist_ok=True)
     os.makedirs(os.path.join(save_path, 'images'), exist_ok=True)
@@ -129,7 +131,7 @@ def train(num_negatives, save_path):
             content_loss_val = content_loss(enhanced_images, target_images)
 
             poly_loss_val = poly_loss(target_images, enhanced_images, encoder=enhancer.encoder,
-                                      num_extreme_negatives=num_negatives, num_negatives=(num_negatives + 2))
+                                      num_extreme_negatives=num_negatives, negative_batch_size=(num_negatives + 2))
             enhancer_loss = adv_loss + lambda_l1 * l1_loss_val + lambda_con * content_loss_val + lambda_poly * poly_loss_val
 
             # Backward pass and optimization for the enhancer

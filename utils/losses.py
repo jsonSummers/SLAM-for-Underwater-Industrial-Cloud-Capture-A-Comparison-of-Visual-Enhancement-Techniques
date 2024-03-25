@@ -146,18 +146,8 @@ def build_batch_embedding_matrix(positive_embeddings, negative_embeddings):
 
     # Combine positive and negative embeddings into a single tensor
     all_embeddings = torch.cat((positive_embeddings.unsqueeze(1), negative_embeddings_tensor), dim=1)
-    print('all_embeddings shape:', all_embeddings.shape)
 
     return all_embeddings
-
-
-def build_slice_distance_matrix(all_embeddings, slice_index):
-    reshaped_matrices = all_embeddings[slice_index].view(4, -1)
-    print('reshaped_matrices shape:', reshaped_matrices.shape)
-
-    distances = torch.cdist(reshaped_matrices, reshaped_matrices, p=2)
-    print('distances shape:', distances.shape)
-    return distances
 
 
 def build_distance_matrix(all_embeddings):
@@ -172,46 +162,85 @@ def build_distance_matrix(all_embeddings):
     # Calculate pairwise distances
     distances = torch.cdist(reshaped_tensor, reshaped_tensor, p=2)
 
-    all_distances = distances.view(batch_size, num_positive_and_negatives, num_positive_and_negatives)
+    distance_matrix = distances.view(batch_size, num_positive_and_negatives, num_positive_and_negatives)
 
-    return all_distances
+    return distance_matrix
 
 
-def poly_loss(targets, anchors, encoder, num_extreme_negatives, num_negatives):
+def find_extreme_negatives_recursive(all_embeddings, num_extreme_negatives, extreme_negatives=None):
+    if extreme_negatives is None:
+        extreme_negatives = []
+
+    # Base case: If we have found the desired number of extreme negatives, return
+    if len(extreme_negatives) == num_extreme_negatives:
+        print("Base case reached. Extreme negatives:", extreme_negatives)
+        return extreme_negatives
+
+    # Step 1: Build the distance matrix
+    distance_matrix = build_distance_matrix(all_embeddings)
+    print('Distance matrix:', distance_matrix.shape)
+
+    # Get distances between positive and negatives
+    pos_to_neg_distances = distance_matrix[0, 1:]
+    print('Positive to negative distances:', pos_to_neg_distances)
+
+    # Ensure the current negative has infinite distance from itself and any selected negatives
+    for neg_index in extreme_negatives:
+        pos_to_neg_distances[neg_index] = float('inf')
+
+    # Find the furthest negative embedding
+    furthest_negative_index = torch.argmax(pos_to_neg_distances)
+    print('Furthest negative index:', furthest_negative_index)
+    extreme_negatives.append(furthest_negative_index)
+
+    # Recur with the updated list of extreme negatives
+    print('Extreme negatives so far:', extreme_negatives)
+    return find_extreme_negatives_recursive(all_embeddings, num_extreme_negatives, extreme_negatives)
+
+
+def find_extreme_negatives_batch(all_embeddings, num_extreme_negatives):
+    batch_size = all_embeddings.size(0)
+    extreme_negative_embeddings_batch = []
+    for i in range(batch_size):
+        slice = all_embeddings[i]
+        print('Processing slice', i)
+        extreme_negative_embeddings = find_extreme_negatives_recursive(slice.unsqueeze(0), num_extreme_negatives)
+        extreme_negative_embeddings = torch.stack(extreme_negative_embeddings, dim=0)  # Convert the list to a tensor
+        extreme_negative_embeddings_batch.append(extreme_negative_embeddings.squeeze(0))  # Remove the batch dimension
+    return torch.stack(extreme_negative_embeddings_batch, dim=0)
+
+
+def poly_loss(targets, anchors, encoder, num_extreme_negatives, negative_batch_size, margin=1.0):
     # Generate negative batch
-    negatives = generate_negatives(anchors, num_negatives)
+    negatives = generate_negatives(anchors, negative_batch_size)
+
     # Encode target, anchor, and negatives
     target_embedding, _ = encoder(targets)
-    # anchor_embedding, _ = encoder(anchors)
-    # negative_embeddings = [encoder(negative)[0] for negative in negatives]
+    anchor_embedding, _ = encoder(anchors)
+    negative_embeddings = [encoder(negative)[0] for negative in negatives]
 
-    all_embeddings = build_batch_embedding_matrix(encoder(anchors)[0], [encoder(negative)[0] for negative in negatives])
+    # Build batch embedding matrix
+    all_embeddings = build_batch_embedding_matrix(target_embedding, negative_embeddings)
 
-    distance_matrix = build_distance_matrix(all_embeddings)
-    print('distance_matrix shape:', distance_matrix.shape)
+    # Extract extreme negative embeddings
+    extreme_negatives_embeddings = find_extreme_negatives_batch(all_embeddings, num_extreme_negatives)
+    print('Extreme negatives:', len(extreme_negatives_embeddings))
 
+    # Calculate contrastive loss
+    loss = 0.0
+    for extreme_negative_embedding in extreme_negatives_embeddings:
+        print('Extreme negative:', extreme_negative_embedding.shape)
+        print('Anchor:', anchor_embedding.shape)
+        # Calculate distance between anchor and positive
+        distance_positive = torch.pairwise_distance(anchor_embedding, target_embedding)
 
-    stop
+        # Calculate distance between anchor and extreme negative
+        distance_negative = torch.pairwise_distance(anchor_embedding, extreme_negative_embedding)
 
+        # Contrastive loss
+        loss += F.relu(distance_positive - distance_negative + margin)
 
+    # Average the loss
+    loss = loss.mean()
 
-    total_matrix = create_total_distance_matrix(all_embeddings)
-    print('total_matrix shape:', total_matrix.shape)
-
-
-
-    # Build distance matrix
-    distance_matrix = build_distance_matrix(anchor_embedding, negative_embeddings, num_extreme_negatives)
-    print('distance_matrix shape:', distance_matrix.shape)
-
-    # Find extreme negatives
-    extreme_negative_distances = find_extreme_negatives(distance_matrix, num_extreme_negatives)
-
-    # Compute distances
-    positive_distance = F.pairwise_distance(anchor_embedding, target_embedding)
-    negative_distances = extreme_negative_distances
-
-    # Compute loss
-    loss = positive_distance - torch.min(negative_distances, dim=1)[0]
-    loss = torch.clamp(loss, min=0.0)  # Ensure non-negative loss
-    return loss.mean()
+    return loss
