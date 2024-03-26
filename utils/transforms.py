@@ -56,7 +56,7 @@ class GaussianNoise(object):
 
 def create_input_transforms(ratio_min_dist=0.2, range_vignette=(0.2, 0.8), std_cap=0.1):
     return [
-        #transforms.ToTensor(),
+        # transforms.ToTensor(),
         AddVignette(ratio_min_dist, range_vignette),
         GaussianNoise(std_cap=std_cap),
     ]
@@ -64,7 +64,20 @@ def create_input_transforms(ratio_min_dist=0.2, range_vignette=(0.2, 0.8), std_c
 
 def create_pair_transforms(target_size=(256, 256), flip_prob=0.5):
     return [
-        #transforms.ToTensor(),
+        # transforms.ToTensor(),
         transforms.Resize(target_size),
         transforms.RandomHorizontalFlip(p=flip_prob)
     ]
+
+
+def create_poly_loss_transforms():
+    return transforms.Compose([
+        transforms.ColorJitter(brightness=0.3, contrast=0.2, saturation=0.2, hue=0.2),
+        transforms.GaussianBlur(kernel_size=3, sigma=(0.1, 2.0)),
+        transforms.RandomRotation(degrees=15),
+        transforms.RandomHorizontalFlip(p=0.5),
+        transforms.RandomAffine(degrees=15, translate=(0.1, 0.1), scale=(0.9, 1.1), shear=15),
+        transforms.RandomResizedCrop(size=(256, 256), scale=(0.8, 1.0), ratio=(0.9, 1.1)),
+        transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
+        transforms.RandomErasing(p=0.5, scale=(0.02, 0.1), ratio=(0.3, 3.3))
+    ])

@@ -20,7 +20,7 @@ sys.path.append(parent_dir)
 from model import Enhancer, Discriminator, ModelConfig
 from utils.losses import adversarial_loss, l1_loss, content_loss, poly_loss
 from utils.data_utils import GetTrainingPairs
-from utils.transforms import create_pair_transforms, create_input_transforms
+from utils.transforms import create_pair_transforms, create_input_transforms, create_poly_loss_transforms
 
 # Check for GPU availability
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -50,13 +50,14 @@ config = ModelConfig(in_channels=3,
                      num_filters=32,
                      kernel_size=4,
                      stride=2)
-batch_size = 32
+batch_size = 48
 learning_rate = 0.0003
 num_epochs = 100
 
+lambda_adv = 0.5
 lambda_l1 = 0.7
 lambda_con = 0.3
-lambda_poly = 1.0
+lambda_poly = 0.5
 
 
 # Initialize the models
@@ -78,11 +79,9 @@ optimizer_enhancer = optim.Adam(enhancer.parameters(), lr=learning_rate)
 optimizer_discriminator = optim.Adam(discriminator.parameters(), lr=learning_rate)
 
 
-pair_transforms = create_pair_transforms(target_size, flip_prob=0.5)
-input_transforms = create_input_transforms(ratio_min_dist=0.5,
-                                           range_vignette=(0.1, 1.0),
-                                           std_cap=0.05
-                                           )
+pair_transforms = create_pair_transforms(target_size, flip_prob=0.0)
+input_transforms = create_input_transforms(ratio_min_dist=0.5, range_vignette=(0.1, 1.0), std_cap=0.05)
+poly_loss_transforms = create_poly_loss_transforms()
 
 # Initialize data loader
 train_dataset = GetTrainingPairs(root=dataset_path, dataset_name='EUVP',
@@ -104,9 +103,6 @@ checkpoint_frequency = 5
 
 
 def train(num_negatives, save_path):
-
-    num_negatives = 2
-
     os.makedirs(os.path.join(save_path, 'checkpoints', 'enhancer'), exist_ok=True)
     os.makedirs(os.path.join(save_path, 'final_weights'), exist_ok=True)
     os.makedirs(os.path.join(save_path, 'images'), exist_ok=True)
@@ -124,15 +120,14 @@ def train(num_negatives, save_path):
             enhanced_images = enhancer(input_images)
             adv_loss = adversarial_loss(discriminator(enhanced_images), True)
             l1_loss_val = l1_loss(enhanced_images, target_images)
-            #content_loss_val = content_loss(vgg_model, enhanced_images, target_images)
-            #poly_loss_val = poly_loss(enhanced_images, target_images,
-                                      #encoder=enhancer.encoder, num_negatives=num_negatives)
-
             content_loss_val = content_loss(enhanced_images, target_images)
-
             poly_loss_val = poly_loss(target_images, enhanced_images, encoder=enhancer.encoder,
+                                      negative_transforms=poly_loss_transforms,
                                       num_extreme_negatives=num_negatives, negative_batch_size=(num_negatives + 2))
-            enhancer_loss = adv_loss + lambda_l1 * l1_loss_val + lambda_con * content_loss_val + lambda_poly * poly_loss_val
+            enhancer_loss = (lambda_adv * adv_loss) + \
+                            (lambda_l1 * l1_loss_val) + \
+                            (lambda_con * content_loss_val) + \
+                            (lambda_poly * poly_loss_val)
 
             # Backward pass and optimization for the enhancer
             enhancer_loss.backward()
@@ -147,8 +142,11 @@ def train(num_negatives, save_path):
             discriminator_loss.backward()
             optimizer_discriminator.step()
 
-            writer.add_scalar('Generator Loss', enhancer_loss.item(), epoch * len(train_loader) + i)
-            writer.add_scalar('Discriminator Loss', discriminator_loss.item(), epoch * len(train_loader) + i)
+            # Logging individual loss values
+            writer.add_scalar('Adversarial Loss', adv_loss.item(), epoch * len(train_loader) + i)
+            writer.add_scalar('L1 Loss', l1_loss_val.item(), epoch * len(train_loader) + i)
+            writer.add_scalar('Content Loss', content_loss_val.item(), epoch * len(train_loader) + i)
+            writer.add_scalar('Poly Loss', poly_loss_val.item(), epoch * len(train_loader) + i)
 
             if i % 10 == 0:
                 print(f"Epoch [{epoch}/{num_epochs}], Batch [{i}/{len(train_loader)}], "
