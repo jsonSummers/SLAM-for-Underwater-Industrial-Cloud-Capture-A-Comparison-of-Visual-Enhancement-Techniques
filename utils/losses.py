@@ -19,7 +19,7 @@ def l1_loss(output, target):
     return loss
 
 
-def content_loss_old(vgg_model, enhanced_image, clean_image):
+def content_loss(vgg_model, enhanced_image, clean_image):
     # minimise
     # Extract features from the block5_conv2 layer
     features_enhanced = vgg_model(enhanced_image)
@@ -31,7 +31,7 @@ def content_loss_old(vgg_model, enhanced_image, clean_image):
     return loss_content
 
 
-def content_loss(enhanced_image, clean_image):
+def content_loss_non_deep(enhanced_image, clean_image):
     # Compute the content loss using mean squared error (MSE)
     loss_content = F.mse_loss(enhanced_image, clean_image)
     return loss_content

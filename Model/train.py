@@ -54,21 +54,21 @@ batch_size = 48
 learning_rate = 0.0003
 num_epochs = 100
 
-lambda_adv = 0.5
+lambda_adv = 0.0
 lambda_l1 = 0.7
 lambda_con = 0.3
-lambda_poly = 0.5
+lambda_poly = 1.0
 
 
 # Initialize the models
 enhancer = Enhancer(config).to(device)
-discriminator = Discriminator(config).to(device)
+# discriminator = Discriminator(config).to(device)
 
 
-# vgg_weights_path = './vgg19-dcbb9e9d.pth'
-# vgg_model = models.vgg19(pretrained=False)
-# vgg_model.load_state_dict(torch.load(vgg_weights_path))
-# vgg_model.eval().to(device)
+vgg_weights_path = './vgg19-dcbb9e9d.pth'
+vgg_model = models.vgg19(pretrained=False)
+vgg_model.load_state_dict(torch.load(vgg_weights_path))
+vgg_model.eval().to(device)
 
 
 # Define optimization criteria and optimizers
@@ -76,7 +76,7 @@ criterion_adversarial = nn.BCEWithLogitsLoss()
 
 
 optimizer_enhancer = optim.Adam(enhancer.parameters(), lr=learning_rate)
-optimizer_discriminator = optim.Adam(discriminator.parameters(), lr=learning_rate)
+# optimizer_discriminator = optim.Adam(discriminator.parameters(), lr=learning_rate)
 
 
 pair_transforms = create_pair_transforms(target_size, flip_prob=0.0)
@@ -114,18 +114,18 @@ def train(num_negatives, save_path):
 
             # Zero the gradients
             optimizer_enhancer.zero_grad()
-            optimizer_discriminator.zero_grad()
+            # optimizer_discriminator.zero_grad()
 
             # Enhancer forward pass
             enhanced_images = enhancer(input_images)
-            adv_loss = adversarial_loss(discriminator(enhanced_images), True)
+            # adv_loss = adversarial_loss(discriminator(enhanced_images), True)
             l1_loss_val = l1_loss(enhanced_images, target_images)
-            content_loss_val = content_loss(enhanced_images, target_images)
+            content_loss_val = content_loss(vgg_model, enhanced_images, target_images)
             poly_loss_val = poly_loss(target_images, enhanced_images, encoder=enhancer.encoder,
                                       negative_transforms=poly_loss_transforms,
                                       num_extreme_negatives=num_negatives, negative_batch_size=(num_negatives + 2))
-            enhancer_loss = (lambda_adv * adv_loss) + \
-                            (lambda_l1 * l1_loss_val) + \
+            # enhancer_loss = (lambda_adv * adv_loss) + \
+            enhancer_loss =(lambda_l1 * l1_loss_val) + \
                             (lambda_con * content_loss_val) + \
                             (lambda_poly * poly_loss_val)
 
@@ -134,23 +134,25 @@ def train(num_negatives, save_path):
             optimizer_enhancer.step()
 
             # Adversarial forward pass
-            real_loss = adversarial_loss(discriminator(target_images), True)
-            fake_loss = adversarial_loss(discriminator(enhanced_images.detach()), False)
-            discriminator_loss = (real_loss + fake_loss) / 2.0
+            # real_loss = adversarial_loss(discriminator(target_images), True)
+            # fake_loss = adversarial_loss(discriminator(enhanced_images.detach()), False)
+            # discriminator_loss = (real_loss + fake_loss) / 2.0
 
             # Backward pass and optimization for the discriminator
-            discriminator_loss.backward()
-            optimizer_discriminator.step()
+            # discriminator_loss.backward()
+            # optimizer_discriminator.step()
 
             # Logging individual loss values
-            writer.add_scalar('Adversarial Loss', adv_loss.item(), epoch * len(train_loader) + i)
+            writer.add_scalar('Full Enhancer Loss', enhancer_loss.item(), epoch * len(train_loader) + i)
+            # writer.add_scalar('Adversarial Loss', adv_loss.item(), epoch * len(train_loader) + i)
             writer.add_scalar('L1 Loss', l1_loss_val.item(), epoch * len(train_loader) + i)
             writer.add_scalar('Content Loss', content_loss_val.item(), epoch * len(train_loader) + i)
             writer.add_scalar('Poly Loss', poly_loss_val.item(), epoch * len(train_loader) + i)
 
             if i % 10 == 0:
                 print(f"Epoch [{epoch}/{num_epochs}], Batch [{i}/{len(train_loader)}], "
-                      f"Generator Loss: {enhancer_loss.item():.4f}, Discriminator Loss: {discriminator_loss.item():.4f}")
+                      f"Enhancer Loss: {enhancer_loss.item():.4f}")
+                      # f", Discriminator Loss: {discriminator_loss.item():.4f}")
 
         # Save enhanced images at the end of each epoch
         with torch.no_grad():
@@ -165,12 +167,12 @@ def train(num_negatives, save_path):
             if epoch % checkpoint_frequency == 0:
                 torch.save(enhancer.state_dict(), os.path.join(save_path,
                                                                f"checkpoints/enhancer/enhancer_epoch_{epoch}.pth"))
-                torch.save(discriminator.state_dict(),
-                           os.path.join(save_path, f"checkpoints/discriminator/discriminator_epoch_{epoch}.pth"))
+                # torch.save(discriminator.state_dict(),
+                #            os.path.join(save_path, f"checkpoints/discriminator/discriminator_epoch_{epoch}.pth"))
 
         # Save the trained models
         torch.save(enhancer.state_dict(), os.path.join(save_path, "final_weights/enhancer.pth"))
-        torch.save(discriminator.state_dict(), os.path.join(save_path, "final_weights/discriminator.pth"))
+        # torch.save(discriminator.state_dict(), os.path.join(save_path, "final_weights/discriminator.pth"))
         writer.close()
 
 def main():
