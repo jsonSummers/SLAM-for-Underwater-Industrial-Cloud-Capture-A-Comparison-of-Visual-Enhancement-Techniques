@@ -19,7 +19,7 @@ def l1_loss(output, target):
     return loss
 
 
-def content_loss(vgg_model, enhanced_image, clean_image):
+def content_loss_vgg(vgg_model, enhanced_image, clean_image):
     # minimise
     # Extract features from the block5_conv2 layer
     features_enhanced = vgg_model(enhanced_image)

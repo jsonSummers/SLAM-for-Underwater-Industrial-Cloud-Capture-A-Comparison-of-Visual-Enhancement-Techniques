@@ -18,20 +18,20 @@ parent_dir = os.path.dirname(current_dir)
 sys.path.append(parent_dir)
 
 from model import Enhancer, Discriminator, ModelConfig
-from utils.losses import adversarial_loss, l1_loss, content_loss, poly_loss
+from utils.losses import adversarial_loss, l1_loss, poly_loss
 from utils.data_utils import GetTrainingPairs
 from utils.transforms import create_pair_transforms, create_input_transforms, create_poly_loss_transforms
 
 # Check for GPU availability
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using {device}")
-#print(torch.cuda.is_available())
+# print(torch.cuda.is_available())
 torch.cuda.empty_cache()
 
-#dataset_path = os.getcwd() + '\\..\\Data\\Paired'
+# dataset_path = os.getcwd() + '\\..\\Data\\Paired'
 dataset_path = os.getcwd() + '/../Data/Paired'
-#dataset_path = os.getcwd() + '/../Data'
-#print("cwd is:" + dataset_path)
+# dataset_path = os.getcwd() + '/../Data'
+# print("cwd is:" + dataset_path)
 
 # Set the seed for reproducibility
 seed = 42
@@ -55,25 +55,28 @@ learning_rate = 0.0003
 num_epochs = 100
 
 lambda_adv = 0.0
-lambda_l1 = 0.7
-lambda_con = 0.3
-lambda_poly = 1.0
-
+lambda_l1 = 0.5
+lambda_con = 0.2
+lambda_poly = 5.0
 
 # Initialize the models
 enhancer = Enhancer(config).to(device)
 # discriminator = Discriminator(config).to(device)
 
+use_vgg_content = False
 
-vgg_weights_path = './vgg19-dcbb9e9d.pth'
-vgg_model = models.vgg19(pretrained=False)
-vgg_model.load_state_dict(torch.load(vgg_weights_path))
-vgg_model.eval().to(device)
+if use_vgg_content:
+    from utils.losses import content_loss_vgg
 
+    vgg_weights_path = './vgg19-dcbb9e9d.pth'
+    vgg_model = models.vgg19(pretrained=False)
+    vgg_model.load_state_dict(torch.load(vgg_weights_path))
+    vgg_model.eval().to(device)
+else:
+    from utils.losses import content_loss_non_deep
 
 # Define optimization criteria and optimizers
 criterion_adversarial = nn.BCEWithLogitsLoss()
-
 
 optimizer_enhancer = optim.Adam(enhancer.parameters(), lr=learning_rate)
 # optimizer_discriminator = optim.Adam(discriminator.parameters(), lr=learning_rate)
@@ -81,7 +84,6 @@ optimizer_enhancer = optim.Adam(enhancer.parameters(), lr=learning_rate)
 
 pair_transforms = create_pair_transforms(target_size, flip_prob=0.0)
 input_transforms = create_input_transforms(ratio_min_dist=0.5, range_vignette=(0.1, 1.0), std_cap=0.05)
-poly_loss_transforms = create_poly_loss_transforms()
 
 # Initialize data loader
 train_dataset = GetTrainingPairs(root=dataset_path, dataset_name='EUVP',
@@ -93,7 +95,6 @@ print(f"Number of samples in the dataset: {dataset_length}")
 evaluation_indices = np.random.choice(dataset_length, size=num_evaluation_pairs, replace=False)
 evaluation_subset = Subset(train_dataset, evaluation_indices)
 evaluation_loader = DataLoader(evaluation_subset, batch_size=num_evaluation_pairs, shuffle=False)
-
 
 train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=4)
 
@@ -109,6 +110,8 @@ def train(num_negatives, save_path):
 
     # Training loop
     for epoch in range(num_epochs):
+        poly_loss_transforms = create_poly_loss_transforms(epoch)
+
         for i, batch in enumerate(train_loader):
             input_images, target_images = batch['input'].to(device), batch['target'].to(device)
 
@@ -118,14 +121,19 @@ def train(num_negatives, save_path):
 
             # Enhancer forward pass
             enhanced_images = enhancer(input_images)
+
+            # Calculate losses
             # adv_loss = adversarial_loss(discriminator(enhanced_images), True)
             l1_loss_val = l1_loss(enhanced_images, target_images)
-            content_loss_val = content_loss(vgg_model, enhanced_images, target_images)
+            content_loss_val = content_loss_vgg(vgg_model, enhanced_images, target_images) if use_vgg_content \
+                else content_loss_non_deep(enhanced_images, target_images)
             poly_loss_val = poly_loss(target_images, enhanced_images, encoder=enhancer.encoder,
                                       negative_transforms=poly_loss_transforms,
-                                      num_extreme_negatives=num_negatives, negative_batch_size=(num_negatives + 2))
+                                      num_extreme_negatives=num_negatives,
+                                      negative_batch_size=(num_negatives + 2))
+
             # enhancer_loss = (lambda_adv * adv_loss) + \
-            enhancer_loss =(lambda_l1 * l1_loss_val) + \
+            enhancer_loss = (lambda_l1 * l1_loss_val) + \
                             (lambda_con * content_loss_val) + \
                             (lambda_poly * poly_loss_val)
 
@@ -152,7 +160,7 @@ def train(num_negatives, save_path):
             if i % 10 == 0:
                 print(f"Epoch [{epoch}/{num_epochs}], Batch [{i}/{len(train_loader)}], "
                       f"Enhancer Loss: {enhancer_loss.item():.4f}")
-                      # f", Discriminator Loss: {discriminator_loss.item():.4f}")
+                # f", Discriminator Loss: {discriminator_loss.item():.4f}")
 
         # Save enhanced images at the end of each epoch
         with torch.no_grad():
@@ -161,7 +169,9 @@ def train(num_negatives, save_path):
                 enhanced_samples = enhancer(input_images)
                 side_by_side_input = torch.cat((input_images.cpu(), target_images.cpu()), dim=3)
                 side_by_side = torch.cat((side_by_side_input, enhanced_samples.cpu()), dim=3)
-                save_image(side_by_side, os.path.join(save_path, f"images/evaluation_samples_seed_{seed}_epoch_{epoch}.png"), normalize=False)
+                save_image(side_by_side,
+                           os.path.join(save_path, f"images/evaluation_samples_seed_{seed}_epoch_{epoch}.png"),
+                           normalize=False)
                 writer.add_images('Original vs. Enhanced', side_by_side, epoch)
 
             if epoch % checkpoint_frequency == 0:
@@ -175,12 +185,14 @@ def train(num_negatives, save_path):
         # torch.save(discriminator.state_dict(), os.path.join(save_path, "final_weights/discriminator.pth"))
         writer.close()
 
+
 def main():
     parser = argparse.ArgumentParser(description="Train models with specified number of negatives.")
     parser.add_argument("num_negatives", type=int, help="Number of negatives.")
     parser.add_argument("save_path", type=str, help="Path to save results.")
     args = parser.parse_args()
     train(args.num_negatives, args.save_path)
+
 
 if __name__ == "__main__":
     main()
