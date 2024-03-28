@@ -163,8 +163,12 @@ def build_distance_matrix(all_embeddings):
     return distance_matrix
 
 
-def find_extreme_negatives_recursive(all_embeddings, num_extreme_negatives, extreme_negatives_indices=None,
+def find_extreme_negatives_recursive_old(all_embeddings, num_extreme_negatives, extreme_negatives_indices=None,
                                      current_distances=None):
+
+    #positive_embedding = all_embeddings[:, 0]
+    #negative_embeddings = all_embeddings[:, 1:]
+
     if extreme_negatives_indices is None:
         extreme_negatives_indices = []
 
@@ -172,18 +176,12 @@ def find_extreme_negatives_recursive(all_embeddings, num_extreme_negatives, extr
         current_distances = build_distance_matrix(all_embeddings)
 
     if num_extreme_negatives == 1:
-        positive_embedding = all_embeddings[:, 0]
-        negative_embeddings = all_embeddings[:, 1:]
-
         positive_to_negatives = current_distances[:, 0, 1:]
         furthest_negative_idx = torch.argmax(positive_to_negatives).item() + 1
         return [furthest_negative_idx]
 
     if len(extreme_negatives_indices) == num_extreme_negatives:
         return extreme_negatives_indices
-
-    positive_embedding = all_embeddings[:, 0]
-    negative_embeddings = all_embeddings[:, 1:]
 
     positive_to_negatives = current_distances[:, 0, 1:]
     furthest_negative_idx = torch.argmax(positive_to_negatives).item() + 1
@@ -208,8 +206,44 @@ def find_extreme_negatives_recursive(all_embeddings, num_extreme_negatives, extr
                 next_negative_idx = i
     extreme_negatives_indices.append(next_negative_idx)
 
-    return find_extreme_negatives_recursive(all_embeddings, num_extreme_negatives, extreme_negatives_indices,
+    return find_extreme_negatives_recursive_old(all_embeddings, num_extreme_negatives, extreme_negatives_indices,
                                             current_distances)
+
+
+def find_furthest_negative(distance_matrix, selected_negatives):
+
+    # Exclude already selected negative indices and the positive index from consideration
+    distance_matrix[:, selected_negatives + [0]] = float('inf')
+
+    # Find the index of the furthest negative (maximize the minimum distance)
+    min_distances_to_selected = distance_matrix[:, selected_negatives].min(dim=1)[0]
+    furthest_negative_idx = min_distances_to_selected.argmax().item()
+
+    return furthest_negative_idx
+
+
+def find_extreme_negatives_recursive(all_embeddings, num_extreme_negatives, extreme_negatives_indices=None):
+
+    distances = build_distance_matrix(all_embeddings)
+
+    if extreme_negatives_indices is None:
+        extreme_negatives_indices = []
+
+    if not extreme_negatives_indices:
+        # If extreme_negatives_indices is empty, add the furthest negative index
+        positive_to_negatives = distances[:, 0, 1:]
+        furthest_negative_idx = torch.argmax(positive_to_negatives).item() + 1
+        extreme_negatives_indices.append(furthest_negative_idx)
+
+    if len(extreme_negatives_indices) == num_extreme_negatives:
+        return extreme_negatives_indices
+
+    # Find the next furthest negative
+    furthest_negative_idx = find_furthest_negative(distances[0], extreme_negatives_indices)
+
+    extreme_negatives_indices.append(furthest_negative_idx)
+
+    return find_extreme_negatives_recursive(all_embeddings, num_extreme_negatives, extreme_negatives_indices)
 
 
 def find_extreme_negatives_batch(all_embeddings, num_extreme_negatives):
